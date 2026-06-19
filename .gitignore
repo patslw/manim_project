@@ -1,0 +1,8 @@
+.venv/
+media/
+__pycache__/
+*.pyc
+result/
+.direnv/
+.flox/
+.envrc
