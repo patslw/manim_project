@@ -1,0 +1,9 @@
+[submodule ".opencode/skills/opencode-skill-creator"]
+	path = .opencode/skills/opencode-skill-creator
+	url = git@github.com:antongulin/opencode-skill-creator.git
+[submodule ".agents/skills/git-workflow-skill"]
+	path = .agents/skills/git-workflow-skill
+	url = git@github.com:netresearch/git-workflow-skill.git
+[submodule ".agents/skills/stop-slop"]
+	path = .agents/skills/stop-slop
+	url = git@github.com:hardikpandya/stop-slop.git
