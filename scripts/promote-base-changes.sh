@@ -5,10 +5,9 @@ usage() {
   cat <<'EOF'
 Usage: scripts/promote-base-changes.sh [--yes]
 
-Promotes base-environment changes from the current video worktree into the
-base repository. The script only considers approved shared paths, shows the
-diff, asks for confirmation, creates a recontribution branch from the base
-branch, applies the patch there, and does not commit.
+Cherry-picks commits marked with #base from the current video branch onto a
+recontribution branch based on the base branch. The marker may appear anywhere
+in the commit subject or body as a standalone token.
 
 Run this from a video worktree, for example:
   scripts/promote-base-changes.sh
@@ -16,11 +15,6 @@ Run this from a video worktree, for example:
 Environment:
   BASE_BRANCH   Base environment branch name. Default: base
   BASE_WORKTREE Base worktree path. Default: worktree for BASE_BRANCH
-
-Notes:
-  New files must be tracked or intent-to-add in the video worktree to appear in
-  the generated patch. Use git add -N <file> for new shared files you want to
-  promote without staging their content.
 EOF
 }
 
@@ -79,26 +73,6 @@ if [[ -z "$base_worktree" ]]; then
   fi
 fi
 
-base_paths=(
-  AGENTS.md
-  README.md
-  docs
-  scripts
-  src
-  templates
-  .opencode
-  .agents
-  .gitmodules
-  flake.nix
-  flake.lock
-  manim.cfg
-  pyproject.toml
-  requirements.txt
-  requirements-dev.txt
-  uv.lock
-  poetry.lock
-)
-
 if [[ "$source_worktree" == "$base_worktree" ]]; then
   echo "Run this from a video worktree, not the base worktree." >&2
   exit 1
@@ -128,31 +102,25 @@ if ! git -C "$source_worktree" rev-parse --verify "$base_branch" >/dev/null 2>&1
   exit 1
 fi
 
-status_output="$(git -C "$source_worktree" status --short -- "${base_paths[@]}" || true)"
-if [[ -z "$status_output" ]] && git -C "$source_worktree" diff --quiet "$base_branch" -- "${base_paths[@]}"; then
-  echo "No promotable base-environment changes found."
+tagged_commits=()
+while IFS= read -r commit; do
+  message="$(git -C "$source_worktree" show -s --format='%B' "$commit")"
+  if grep -Eq '(^|[[:space:]])#base([[:space:]]|$)' <<<"$message"; then
+    tagged_commits+=("$commit")
+  fi
+done < <(git -C "$source_worktree" rev-list --reverse "${base_branch}..HEAD")
+
+if [[ "${#tagged_commits[@]}" -eq 0 ]]; then
+  echo "No commits marked with #base were found in ${base_branch}..${source_branch}."
   exit 0
 fi
 
-untracked_output="$(git -C "$source_worktree" status --short --untracked-files=all -- "${base_paths[@]}" | grep '^??' || true)"
-if [[ -n "$untracked_output" ]]; then
-  cat <<EOF
-Untracked shared files were found. They will not be included unless you mark
-them with git add -N or stage them in the video worktree:
-
-$untracked_output
-EOF
-fi
-
-echo "Promotable shared-path status:"
-git -C "$source_worktree" status --short -- "${base_paths[@]}"
-
-echo
-echo "Diff to apply to recontribution branch:"
-git -C "$source_worktree" diff --binary "$base_branch" -- "${base_paths[@]}"
+echo "Commits marked for base recontribution:"
+git -C "$source_worktree" show -s --format='  %h %s' "${tagged_commits[@]}"
 
 if [[ "$assume_yes" -ne 1 ]]; then
-  printf '\nCreate %s and apply this patch to %s? [y/N] ' "$recontribute_branch" "$base_worktree"
+  printf '\nCreate %s and cherry-pick these commits into %s? [y/N] ' \
+    "$recontribute_branch" "$base_worktree"
   read -r answer
   case "$answer" in
     y|Y|yes|YES)
@@ -164,30 +132,30 @@ if [[ "$assume_yes" -ne 1 ]]; then
   esac
 fi
 
-patch_file="$(mktemp)"
-trap 'rm -f "$patch_file"' EXIT
-git -C "$source_worktree" diff --binary "$base_branch" -- "${base_paths[@]}" > "$patch_file"
-
-if [[ ! -s "$patch_file" ]]; then
-  echo "No patch was generated. If you only have new files, mark them with git add -N first." >&2
-  exit 1
-fi
-
 git -C "$base_worktree" switch "$base_branch"
 git -C "$base_worktree" switch -c "$recontribute_branch" "$base_branch"
-git -C "$base_worktree" apply --3way "$patch_file"
+
+for commit in "${tagged_commits[@]}"; do
+  if ! git -C "$base_worktree" cherry-pick "$commit"; then
+    cat >&2 <<EOF
+Cherry-pick stopped at $commit.
+Resolve the conflict in $base_worktree, then run:
+  git cherry-pick --continue
+To cancel the recontribution:
+  git cherry-pick --abort
+EOF
+    exit 1
+  fi
+done
 
 cat <<EOF
-Applied shared changes to a recontribution branch:
+Promoted ${#tagged_commits[@]} #base commit(s):
   Source:      $source_branch ($source_worktree)
   Target:      $recontribute_branch ($base_worktree)
   Base branch: $base_branch
 
 Next steps:
   cd "$base_worktree"
-  git diff
-  git status --short
-  git add <intended files>
-  git commit -m "feat(core): describe shared change"
+  git log "$base_branch..HEAD" --oneline
   git push -u origin "$recontribute_branch"
 EOF

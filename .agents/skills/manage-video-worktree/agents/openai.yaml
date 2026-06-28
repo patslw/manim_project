@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage Video Worktree"
+  short_description: "Create, sync, and promote Manim video worktrees"
+  default_prompt: "Use $manage-video-worktree to manage this Manim video branch or worktree."
