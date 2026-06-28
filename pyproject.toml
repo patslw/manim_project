@@ -1,0 +1,21 @@
+[project]
+name = "program-loader-video"
+version = "0.1.0"
+description = "Manim source for the program loader video"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "manim>=0.19.0,<0.20",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [".agents", ".claude"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

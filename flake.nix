@@ -1,5 +1,5 @@
 {
-  description = "Manim dev environment for stock-picking videos";
+  description = "System dependencies for Manim video development";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -12,8 +12,8 @@
     in
     {
       devShells.${system}.default = pkgs.mkShell {
-        buildInputs = [
-          pkgs.python312
+        packages = [
+          pkgs.uv
           pkgs.ffmpeg
           pkgs.pango
           pkgs.cairo
@@ -25,15 +25,14 @@
           pkgs.texlivePackages.ctex
         ];
 
+        UV_PROJECT_ENVIRONMENT = ".venv";
+
         shellHook = ''
           export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
             pkgs.stdenv.cc.cc.lib
             pkgs.zlib
-            # pkgs.libGL
-            # pkgs.glib
           ]}:$LD_LIBRARY_PATH"
-          export PATH="$PWD/.venv/bin:$PATH"
-          echo "Manim dev environment ready — python: $(python3 --version)"
+          echo "Manim system environment ready. Run: uv sync"
         '';
       };
     };
