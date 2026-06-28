@@ -63,6 +63,8 @@ fi
 
 mkdir -p "$worktree_parent"
 git -C "$base_dir" worktree add "$worktree_dir" -b "$branch" "$base_branch"
+cd "$worktree_dir"
+git submodule update --init --recursive
 
 cat <<EOF
 Created video worktree:
