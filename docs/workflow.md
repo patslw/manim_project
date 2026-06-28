@@ -35,6 +35,8 @@ Video branches should contain video-specific work:
 - Video-only assets, notes, scripts, and experiments.
 - Temporary rendering experiments that should not become part of the base environment.
 
+Each video worktree keeps its video-only files under `project/`.
+
 ## Worktree Layout
 
 Recommended local layout:
@@ -110,12 +112,16 @@ scripts/sync-video-with-base.sh
 
 Prefer making shared improvements directly on `base` in the base worktree.
 
-If a shared improvement starts inside a video branch, split it into its own commit before moving it back to `base`.
+If a shared improvement starts inside a video branch, split it into its own
+commit and add a standalone `#base` tag to the commit subject or body.
 
 Good commit split:
 
 ```text
 feat(core): add reusable number line helper
+
+#base
+
 feat(video-001): use number line helper in opening scene
 ```
 
@@ -144,27 +150,21 @@ cd /home/pats/projects/manim_project/videos/video-001
 git rebase base
 ```
 
-For shared-path changes, use the promotion helper from the video worktree:
+To collect marked commits, use the promotion helper from the video worktree:
 
 ```bash
 scripts/promote-base-changes.sh
 ```
 
-The helper only considers approved shared paths, shows the patch, asks for confirmation, creates a `recontribute/<video>-to-base` branch from `base`, applies the patch there, and leaves review plus commit to the user.
+The helper scans commits in `base..HEAD` and selects only messages containing
+`#base` as a standalone token. It shows the selected commits, asks for
+confirmation, creates `recontribute/<video>-to-base` from `base`, and
+cherry-picks the commits in chronological order. Commits without the tag stay
+on the video branch, even when they edit shared directories.
 
-Approved shared paths currently include:
-
-- `AGENTS.md`, `README.md`, and `docs/`.
-- `scripts/`, `src/`, and `templates/`.
-- `.opencode/`, `.agents/`, and `.gitmodules`.
-- `flake.nix`, `flake.lock`, `manim.cfg`, and Python dependency files.
-
-New shared files in a video worktree must be tracked or marked with intent-to-add before promotion:
-
-```bash
-git add -N path/to/new-shared-file
-scripts/promote-base-changes.sh
-```
+The tag grants promotion to the whole commit, so do not mix reusable files and
+video-only files in one `#base` commit. If a cherry-pick conflicts, resolve it
+in the base worktree and continue with `git cherry-pick --continue`.
 
 ## Commit Style
 
@@ -174,6 +174,9 @@ Examples:
 
 ```text
 feat(core): add reusable graph utilities
+
+#base
+
 fix(core): handle missing asset directory
 docs(workflow): document video worktree model
 feat(video-001): add intro scene
@@ -194,38 +197,37 @@ Keep reusable code separate from video-specific code.
 Suggested structure:
 
 ```text
-src/
-  manim_base/
-    components/
-    utils/
-    templates/
+project/
+  script/
+    outline.md
+    narration.md
+  references/
+    README.md
+  scenes/
+    s010_opening/
+      storyboard.md
+      scene.py
+      assets/
+  assets/
+  main.py
+shared/
+  manim/
+  vscode/
 scripts/
 docs/
-projects/
-  001-topic/
-    scene.py
-    assets/
-    notes.md
 ```
 
-The exact structure can evolve, but the rule should stay stable: shared code belongs in shared directories, and video-only code belongs under that video's area. Do not confuse an in-repository video source directory with the external `../videos/` worktree parent directory.
+Use `scripts/create-scene.sh 010 opening Opening` to create a numbered scene.
+Keep every scene independently renderable. Put one-scene assets beside the
+scene and video-wide assets in `project/assets/`.
 
-## Rules For OpenCode And Other Agents
+Put cross-video components in `shared/` and commit them separately with
+`#base`. Helpers that serve only the current video stay under `project/`.
 
-- Treat `/home/pats/projects/manim_project/base` as the base environment worktree.
-- Do not put video-specific work directly into the base environment unless the user explicitly asks for that.
-- When creating a new video, prefer a new `video/<id>-<topic>` branch through `git worktree`.
-- Keep shared changes and video changes in separate commits whenever possible.
-- Do not modify or remove another worktree's changes unless explicitly instructed.
-- Before committing, inspect the worktree and commit only intended files.
-
-The project-level OpenCode config is `opencode.json`. It loads `AGENTS.md` and the project skill directories. Restart OpenCode after changing `opencode.json`, `.opencode/command/`, `.opencode/skills/`, or agent instructions.
-
-Available OpenCode commands:
-
-- `/create-video <id> <topic-slug>` creates a `video/<id>-<topic>` branch and worktree.
-- `/sync-video` rebases the current video branch onto `base`.
-- `/promote-base` applies shared-path changes from the current video worktree into a recontribution branch for review.
+The exact structure can evolve, but the boundary should stay stable:
+`project/` is video-specific, while `shared/` is eligible for base
+recontribution. Do not confuse the in-repository `project/` directory with the
+external `../videos/` worktree parent.
 
 ## Automation Scripts
 
@@ -241,7 +243,8 @@ Sync the current video worktree with the base branch:
 scripts/sync-video-with-base.sh
 ```
 
-Promote shared-path changes from a video worktree into a recontribution branch:
+Promote commits tagged with `#base` from a video worktree into a
+recontribution branch:
 
 ```bash
 scripts/promote-base-changes.sh
